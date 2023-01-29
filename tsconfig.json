@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "es6",
+    "target": "es2021",
+    "sourceMap": true,
+    "moduleResolution": "Node",
+    "declaration": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+  ]
+}
