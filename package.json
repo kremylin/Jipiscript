@@ -18,16 +18,17 @@
     "compile": "npx tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Kremylin",
   "license": "ISC",
-  "description": "",
+  "description": "Use GPT-3 (almost) as Javascript functions",
   "keywords": [
     "Jipiti",
     "Jipiscript",
     "GPT3",
     "GPT-3",
     "OpenAI",
-    "language model",
+    "large language model",
+    "LLM",
     "Prompt generation",
     "AI-powered language generation",
     "AI-powered object generation",
@@ -35,6 +36,7 @@
     "Prompt to Class",
     "Prompt to Number",
     "Prompt to String",
-    "Prompt to Boolean"
+    "Prompt to Boolean",
+    "Kremylin"
   ]
 }

@@ -11,40 +11,50 @@ export default class Jipiscript {
 
   async ask(
     question: string,
+    parameters = {},
     returnType:
       | typeof Object
       | typeof String
       | typeof Number
       | typeof Boolean = String,
-    parameters = {}
+    options: {
+      structureSource: StructureSource;
+      structure: Object;
+    }
   ): Promise<object | string | number | boolean> {
-    return this.run(question, returnType, parameters);
+    return this.run(question, parameters, returnType, options);
   }
 
   async execute(
     task: string,
+    parameters = {},
     returnType:
       | typeof Object
       | typeof String
       | typeof Number
       | typeof Boolean = String,
-    parameters = {}
+    options: {
+      structureSource: StructureSource;
+      structure: Object;
+    }
   ): Promise<object | string | number | boolean> {
-    return this.run(task, returnType, parameters);
+    return this.run(task, parameters, returnType, options);
   }
 
   async run(
     action: string,
+    parameters = {},
     returnType:
       | typeof Object
       | typeof String
       | typeof Number
       | typeof Boolean = String,
-    parameters = {}
+    options: {
+      structureSource: StructureSource;
+      structure: Object;
+    }
   ): Promise<object | string | number | boolean> {
     const prompt = populateParameters(action, parameters);
-
-    // console.debug("Completion Request : ", prompt);
 
     if (returnType === String) {
       return await this.requestString(this.context, prompt);
@@ -56,26 +66,34 @@ export default class Jipiscript {
       return await this.requestObject(this.context, prompt);
     }
 
-    return this.requestClass(this.context, prompt, returnType);
+    return this.requestClass(this.context, prompt, returnType, options);
   }
 
   changeContext(context: string) {
-    this.context = context;
     if (typeof context != "string") {
       throw new Error(
         "Stupid meatbag... The context must obviously be a string"
       );
     }
+    this.context = context;
   }
 
-  async requestString(context: string, prompt) {
+  async requestString(context: string, prompt: string) {
     return await this.gpt.complete(context + prompt);
   }
 
-  async requestNumber(context: string, prompt) {
-    prompt = context + prompt + "\nAnswer with a number.\n";
+  async requestNumber(context: string, prompt: string) {
+    prompt =
+      "You are a computer, you must return the answer as a number\n" +
+      "Examples:" +
+      "Prompt(How many color are in a rainbow?)\n" +
+      "Result(7)\n" +
+      "Prompt(4.5+3.2)\n" +
+      "Result(7.7)\n" +
+      `Context : ${context}\n` +
+      `Prompt(${prompt})\n`;
 
-    const response = +(await this.gpt.complete(prompt)).replaceAll("\n", "");
+    const response = +(await this.complete(prompt));
 
     if (isNaN(response)) {
       throw new Error("Robot on the loose! Number uprisi*%$$..");
@@ -85,43 +103,114 @@ export default class Jipiscript {
   }
 
   async requestBoolean(context: string, prompt) {
-    prompt = context + prompt + "\nAnswer with true or false.\n";
+    prompt =
+      "You are a computer, you must return the answer as a boolean\n" +
+      "Examples:" +
+      "Prompt(Is the sky blue?)\n" +
+      "Result(true)\n" +
+      "Prompt(Le ciel est-il jaune?)\n" +
+      "Result(false)\n" +
+      `Context : ${context}\n` +
+      `Prompt(${prompt})\n`;
 
-    const response = (await this.gpt.complete(prompt)).replaceAll("\n", "");
+    const response = await this.complete(prompt);
 
-    if (response.toLowerCase() === "true") {
+    if (response.toLowerCase().startsWith("true")) {
       return true;
-    } else if (response.toLowerCase() === "false") {
+    } else if (response.toLowerCase().startsWith("false")) {
       return false;
     } else {
       throw new Error("Robot on the loose! Boolean uprisi*%$$..");
     }
   }
 
-  async requestClass(context: string, prompt, TargetClass) {
-    const fields = Object.keys(new TargetClass());
+  getInstanceStructure(instance) {
+    const structure = {};
+
+    for (const key of Object.keys(instance)) {
+      const type = typeof instance[key];
+      if (type === "object" && instance[key]) {
+        structure[key] = this.getInstanceStructure(instance[key]);
+      } else if (type === "undefined") {
+        structure[key] = "any";
+      } else {
+        structure[key] = type;
+      }
+    }
+
+    return structure;
+  }
+
+  getClassStructure(TargetClass, options) {
+    let structureSource = StructureSource.EmptyInstance;
+
+    if (options?.structureSource) {
+      structureSource = options.structureSource;
+    } else if (options?.structure) {
+      structureSource = StructureSource.Options;
+    } else if (TargetClass?.jipi?.structure) {
+      structureSource = StructureSource.JipiProperty;
+    }
+
+    return JSON.stringify(
+      structureSource === StructureSource.Options
+        ? options.structure
+        : structureSource === StructureSource.JipiProperty
+        ? TargetClass.jipi.structure
+        : this.getInstanceStructure(new TargetClass())
+    );
+  }
+
+  async requestClass(context: string, prompt: string, TargetClass, options) {
+    const structure = this.getClassStructure(TargetClass, options);
 
     prompt =
-      context +
-      prompt +
-      "\nYour answer must be in the form [" +
-      fields.join(",") +
-      "].\n";
+      "You are a computer, you must return the answer as a json with the specified structure\n" +
+      "Do not use thousands separator for numbers!\n" +
+      "Examples:" +
+      'Prompt(Name a flower, {"name":"string","color":"string"})\n' +
+      'Result({"name":"rose","color":"red"})\n' +
+      'Prompt(Quelle est la 4ème planète du système solaire?,{"nom":"string","rayon":"number","lunes":"array(string)"})\n' +
+      'Result({"nom":"Mars","rayon":3389.5,"lunes":["phobos","deimos"]})\n' +
+      `Context : ${context}\n` +
+      `Prompt(${prompt},${structure})\n`;
 
-    const response = (await this.gpt.complete(prompt))
-      .replaceAll("\n", "")
-      .slice(1, -1);
+    const response = await this.complete(prompt);
 
-    // TODO Handle non string case?
-    return new TargetClass(...response.split(","));
+    try {
+      return Object.assign(new TargetClass(), JSON.parse(response));
+    } catch (e) {
+      throw new Error(
+        "Robot on the loose! Class uprisi*%$$.." +
+          e.toString() +
+          " - " +
+          response
+      );
+    }
   }
 
   async requestObject(context: string, prompt: string) {
-    prompt = context + prompt + "\nAnswer with a json.\n";
+    prompt =
+      "You are a computer, you must return the answer as a json\n" +
+      "Examples:" +
+      "Prompt(Name a flower)\n" +
+      'Result({"name":"rose","color":"red"})\n' +
+      "Prompt(Quelle est la 4ème planète du système solaire?)\n" +
+      'Result({"nom":"Mars","rayon":3389.5,"lunes":["phobos","deimos"]})\n' +
+      `Context : ${context}\n` +
+      `Prompt(${prompt})\n`;
 
-    const response = (await this.gpt.complete(prompt)).replaceAll("\n", "");
+    const response = await this.complete(prompt);
 
     return JSON.parse(response);
+  }
+
+  async complete(prompt: string) {
+    const response = (await this.gpt.complete(prompt)).replaceAll("\n", "");
+    if (response.startsWith("Result(")) {
+      return response.substring(7, response.length - 1);
+    }
+    return response;
   }
 }
 
@@ -141,7 +230,9 @@ function populateParameters(
 }
 
 function convertToString(param: any): string {
-  if (param instanceof Array) {
+  if (param === null) {
+    return "null";
+  } else if (param instanceof Array) {
     return convertArrayToString(param);
   } else if (typeof param === "object") {
     return convertObjectToString(param);
@@ -151,17 +242,7 @@ function convertToString(param: any): string {
 }
 
 function convertObjectToString(obj: object) {
-  if (obj["toJson"]) {
-    return obj["toJson"]();
-  }
-  return (
-    obj.constructor.name +
-    "(" +
-    Object.entries(obj)
-      .map((field) => field.join(": "))
-      .join(", ") +
-    ")"
-  );
+  return obj.constructor.name + JSON.stringify(obj);
 }
 
 function convertArrayToString(array: any[]) {
@@ -172,4 +253,10 @@ function convertArrayToString(array: any[]) {
       .join(", ") +
     "]"
   );
+}
+
+export enum StructureSource {
+  EmptyInstance,
+  JipiProperty,
+  Options,
 }
