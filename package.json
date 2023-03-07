@@ -19,8 +19,8 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Kremylin",
-  "license": "ISC",
-  "description": "Use GPT-3 (almost) as Javascript functions",
+  "license": "MIT",
+  "description": "Use GPT-3 (almost) like Javascript functions",
   "keywords": [
     "Jipiti",
     "Jipiscript",

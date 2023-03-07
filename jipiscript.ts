@@ -129,7 +129,9 @@ export default class Jipiscript {
 
     for (const key of Object.keys(instance)) {
       const type = typeof instance[key];
-      if (type === "object" && instance[key]) {
+      if (instance[key] instanceof Array) {
+        structure[key] = []; // TODO how to handle non empty arrays? do we have to?
+      } else if (type === "object" && instance[key]) {
         structure[key] = this.getInstanceStructure(instance[key]);
       } else if (type === "undefined") {
         structure[key] = "any";
