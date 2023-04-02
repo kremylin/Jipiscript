@@ -1,11 +1,11 @@
-import { Gpt3Wrapper } from "./gpt3-wrapper.js";
+import { convertToString, inferClassStructure } from "./utils.js";
 
-export default class Jipiscript {
-  private gpt: Gpt3Wrapper;
+export class Jipiscript {
+  private llmModel: LlmModel;
   private context: string;
 
-  constructor(openaiApiKey: string, context: string = "") {
-    this.gpt = new Gpt3Wrapper(openaiApiKey);
+  constructor(llmModel: LlmModel, context: string = "") {
+    this.llmModel = llmModel;
     this.context = context;
   }
 
@@ -79,7 +79,7 @@ export default class Jipiscript {
   }
 
   async requestString(context: string, prompt: string) {
-    return await this.gpt.complete(context + prompt);
+    return await this.llmModel.complete(context + prompt);
   }
 
   async requestNumber(context: string, prompt: string) {
@@ -124,45 +124,6 @@ export default class Jipiscript {
     }
   }
 
-  getInstanceStructure(instance) {
-    const structure = {};
-
-    for (const key of Object.keys(instance)) {
-      const type = typeof instance[key];
-      if (instance[key] instanceof Array) {
-        structure[key] = []; // TODO how to handle non empty arrays? do we have to?
-      } else if (type === "object" && instance[key]) {
-        structure[key] = this.getInstanceStructure(instance[key]);
-      } else if (type === "undefined") {
-        structure[key] = "any";
-      } else {
-        structure[key] = type;
-      }
-    }
-
-    return structure;
-  }
-
-  getClassStructure(TargetClass, options) {
-    let structureSource = StructureSource.EmptyInstance;
-
-    if (options?.structureSource) {
-      structureSource = options.structureSource;
-    } else if (options?.structure) {
-      structureSource = StructureSource.Options;
-    } else if (TargetClass?.jipi?.structure) {
-      structureSource = StructureSource.JipiProperty;
-    }
-
-    return JSON.stringify(
-      structureSource === StructureSource.Options
-        ? options.structure
-        : structureSource === StructureSource.JipiProperty
-        ? TargetClass.jipi.structure
-        : this.getInstanceStructure(new TargetClass())
-    );
-  }
-
   async requestClass(context: string, prompt: string, TargetClass, options) {
     const structure = this.getClassStructure(TargetClass, options);
 
@@ -191,6 +152,26 @@ export default class Jipiscript {
     }
   }
 
+  getClassStructure(TargetClass, options) {
+    let structureSource = StructureSource.EmptyInstance;
+
+    if (options?.structureSource) {
+      structureSource = options.structureSource;
+    } else if (options?.structure) {
+      structureSource = StructureSource.Options;
+    } else if (TargetClass?.jipi?.structure) {
+      structureSource = StructureSource.JipiProperty;
+    }
+
+    return JSON.stringify(
+      structureSource === StructureSource.Options
+        ? options.structure
+        : structureSource === StructureSource.JipiProperty
+        ? TargetClass.jipi.structure
+        : inferClassStructure(new TargetClass())
+    );
+  }
+
   async requestObject(context: string, prompt: string) {
     prompt =
       "You are a computer, you must return the answer as a json\n" +
@@ -208,7 +189,10 @@ export default class Jipiscript {
   }
 
   async complete(prompt: string) {
-    const response = (await this.gpt.complete(prompt)).replaceAll("\n", "");
+    const response = (await this.llmModel.complete(prompt)).replaceAll(
+      "\n",
+      ""
+    );
     if (response.startsWith("Result(")) {
       return response.substring(7, response.length - 1);
     }
@@ -229,32 +213,6 @@ function populateParameters(
   }
 
   return prompt;
-}
-
-function convertToString(param: any): string {
-  if (param === null) {
-    return "null";
-  } else if (param instanceof Array) {
-    return convertArrayToString(param);
-  } else if (typeof param === "object") {
-    return convertObjectToString(param);
-  }
-
-  return param.toString();
-}
-
-function convertObjectToString(obj: object) {
-  return obj.constructor.name + JSON.stringify(obj);
-}
-
-function convertArrayToString(array: any[]) {
-  return (
-    "[" +
-    array
-      .map((value, index) => index + ": " + convertToString(value))
-      .join(", ") +
-    "]"
-  );
 }
 
 export enum StructureSource {

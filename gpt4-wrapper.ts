@@ -1,6 +1,6 @@
 import { Configuration, OpenAIApi } from "openai";
 
-export class Gpt3Wrapper {
+export class Gpt4Wrapper {
   private readonly openai;
 
   constructor(openaiApiKey: string) {
@@ -16,9 +16,14 @@ export class Gpt3Wrapper {
       throw new Error("Not initialized");
     }
     return await this.openai
-      .createCompletion({
-        model: "text-davinci-003",
-        prompt: prompt,
+      .createChatCompletion({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
         temperature: 0.7,
         max_tokens: 256,
         top_p: 1,
@@ -27,7 +32,9 @@ export class Gpt3Wrapper {
       })
       .then((response) => {
         const { data } = response;
-        return data.choices && data.choices.length ? data.choices[0].text : "";
+        return data.choices && data.choices.length
+          ? data.choices[0].message.content
+          : "";
       });
   }
 }

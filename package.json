@@ -1,8 +1,8 @@
 {
   "type": "module",
-  "main": "dist/jipiscript.js",
+  "main": "dist/index.js",
   "dependencies": {
-    "openai": "^3.1.0"
+    "openai": "^3.2.1"
   },
   "devDependencies": {
     "prettier": "2.8.3",
