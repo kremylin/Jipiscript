@@ -9,7 +9,7 @@
     "typescript": "^4.9.4"
   },
   "name": "jipiscript",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "files": [
     "dist"
   ],
