@@ -46,12 +46,14 @@ export class Jipiscript {
     parameters = {},
     returnType:
       | typeof Object
+      | typeof Array
+      | Object
       | typeof String
       | typeof Number
       | typeof Boolean = String,
     options: {
-      structureSource: StructureSource;
-      structure: Object;
+      structureSource?: StructureSource;
+      structure?: Object;
     }
   ): Promise<object | string | number | boolean> {
     const prompt = populateParameters(action, parameters);
@@ -62,6 +64,10 @@ export class Jipiscript {
       return await this.requestNumber(this.context, prompt);
     } else if (returnType === Boolean) {
       return await this.requestBoolean(this.context, prompt);
+    } else if (returnType === Array) {
+      return await this.requestArray(this.context, prompt, []);
+    } else if (returnType instanceof Array) {
+      return await this.requestArray(this.context, prompt, returnType);
     } else if (returnType === Object) {
       return await this.requestObject(this.context, prompt);
     }
@@ -124,7 +130,12 @@ export class Jipiscript {
     }
   }
 
-  async requestClass(context: string, prompt: string, TargetClass, options) {
+  async requestClass(
+    context: string,
+    prompt: string,
+    TargetClass,
+    options?: { structureSource?: StructureSource; structure?: Object }
+  ) {
     const structure = this.getClassStructure(TargetClass, options);
 
     prompt =
@@ -186,6 +197,18 @@ export class Jipiscript {
     const response = await this.complete(prompt);
 
     return JSON.parse(response);
+  }
+
+  async requestArray(context: string, prompt: string, returnType: any) {
+    const response = await this.requestClass(
+      context,
+      prompt,
+      class ArrayResponse {},
+      {
+        structure: { array: returnType },
+      }
+    );
+    return response.array;
   }
 
   async complete(prompt: string) {

@@ -14,7 +14,7 @@ examples:
 const answer = await jipi.ask("Are all those persons US presidents: $persons", { persons: ["Barack Obama", "Bill Clinton", "George Washington", "George W. Bush"] }, Boolean);
 console.log(answer); // true
 
-
+// Get details about a series
 class ImdbSeries {
     static jipi = {
         structure: {
@@ -33,8 +33,7 @@ class ImdbSeries {
 
 const imdb = (series) => jipi.ask("get imdb details of $series", { series }, ImdbSeries);
 
-const answer = await imdb("Black Adder");
-console.log(answer);
+console.log(await imdb("Black Adder"));
 /*
 ImdbSeries {
         title: 'Black Adder',
@@ -92,15 +91,22 @@ import { Jipiscript, Gpt4Wrapper } from "jipiscript";
 const jipi = new Jipiscript(new Gpt4Wrapper("OPENAI_API_KEY"), "some context");
 
 const getCapitals = (countries) => jipi.ask("What are the capital of $countries?", { countries }, Array);
+const getDetailedCapitals = (countries) => jipi.ask("What are the capital of $countries?", { countries }, [{ name: "string", inhabitants: "number"}]);
 
-const answer = await getCapitals(["France", "Belgium", "Canada"]);
-console.log(answer); // ["Paris", "Brussels", "Ottawa"]
+console.log(await getCapitals(["France", "Belgium", "Canada"]));
+// ["Paris", "Brussels", "Ottawa"]
+
+console.log(await getDetailedCapitals(["France", "Belgium", "Canada"]));
+/*[
+    { name: 'Paris', inhabitants: 2148327 },
+    { name: 'Brussels', inhabitants: 1211035 },
+    { name: 'Ottawa', inhabitants: 934243 }
+]*/
 ```
 
 You can receive answers in other data formats, such as numbers, booleans, or [custom classes](docs/using-class-as-return-type.md).
 ```javascript
 class Person {
-  
   constructor(name='', birthYear=0) {
     this.name = name;
     this.birthYear = birthYear;
