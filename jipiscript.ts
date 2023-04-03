@@ -69,7 +69,9 @@ export class Jipiscript {
     } else if (returnType instanceof Array) {
       return await this.requestArray(this.context, prompt, returnType);
     } else if (returnType === Object) {
-      return await this.requestObject(this.context, prompt);
+      return await this.requestObject(this.context, prompt, {});
+    } else if (returnType && returnType.constructor === Object) {
+      return await this.requestObject(this.context, prompt, returnType);
     }
 
     return this.requestClass(this.context, prompt, returnType, options);
@@ -183,23 +185,19 @@ export class Jipiscript {
     );
   }
 
-  async requestObject(context: string, prompt: string) {
-    prompt =
-      "You are a computer, you must return the answer as a json\n" +
-      "Examples:" +
-      "Prompt(Name a flower)\n" +
-      'Result({"name":"rose","color":"red"})\n' +
-      "Prompt(Quelle est la 4ème planète du système solaire?)\n" +
-      'Result({"nom":"Mars","rayon":3389.5,"lunes":["phobos","deimos"]})\n' +
-      `Context : ${context}\n` +
-      `Prompt(${prompt})\n`;
-
-    const response = await this.complete(prompt);
-
-    return JSON.parse(response);
+  async requestObject(context: string, prompt: string, returnType: Object) {
+    const response = await this.requestClass(
+      context,
+      prompt,
+      class ArrayResponse {},
+      {
+        structure: { object: returnType },
+      }
+    );
+    return response.object;
   }
 
-  async requestArray(context: string, prompt: string, returnType: any) {
+  async requestArray(context: string, prompt: string, returnType: Array<any>) {
     const response = await this.requestClass(
       context,
       prompt,

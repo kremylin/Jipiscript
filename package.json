@@ -14,8 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "start": "npx tsc; node test",
-    "compile": "npx tsc",
+    "transpile": "npx tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Kremylin",
