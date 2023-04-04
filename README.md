@@ -11,8 +11,11 @@ Use Jipiscript to use LLM like a function (with parameters) in your code and get
 examples:
 ```javascript
 // Ask a question with an array parameter, get a boolean answer
-const answer = await jipi.ask("Are all those persons US presidents: $persons", { persons: ["Barack Obama", "Bill Clinton", "George Washington", "George W. Bush"] }, Boolean);
-console.log(answer); // true
+console.log(await jipi.ask(
+    "Are all those persons US presidents: $persons",
+    { persons: ["Barack Obama", "Bill Clinton", "George Washington", "George W. Bush"] },
+    Boolean
+)); // true
 
 // Get details about a series
 class ImdbSeries {
