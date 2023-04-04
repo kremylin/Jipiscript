@@ -20,13 +20,7 @@ class ImdbSeries {
         structure: {
             title: "string",
             rating: "number",
-            cast: [
-                {
-                    firstname: "string",
-                    lastname: "string",
-                    superHeroName: "string - wordPlay on his/her last name",
-                },
-            ],
+            cast: [{ lastname: "string", superHeroName: "string - wordPlay on his/her last name",}],
         },
     };
 }
@@ -36,29 +30,13 @@ const imdb = (series) => jipi.ask("get imdb details of $series", { series }, Imd
 console.log(await imdb("Black Adder"));
 /*
 ImdbSeries {
-        title: 'Black Adder',
-        rating: 8.1,
-        cast: [
-        {
-          firstname: 'Rowan',
-          lastname: 'Atkinson',
-          superHeroName: 'Atkinstorm'
-        },
-        {
-          firstname: 'Tony',
-          lastname: 'Robinson',
-          superHeroName: 'Robinsman'
-        },
-        {
-          firstname: 'Hugh',
-          lastname: 'Laurie',
-          superHeroName: 'Doctor Laurie' // I swear i didn't made this up
-        },
-        {
-          firstname: 'Stephen',
-          lastname: 'Fry',
-          superHeroName: 'Fry Fighter'
-        }
+    title: 'Black Adder',
+    rating: 8.1,
+    cast: [
+        { lastname: 'Atkinson', superHeroName: 'Atkinstorm' },
+        { lastname: 'Robinson', superHeroName: 'Robinsman' },
+        { lastname: 'Laurie', superHeroName: 'Doctor Laurie' },
+        { lastname: 'Fry', superHeroName: 'Fry Fighter' }
     ],
 }
 */
