@@ -10,35 +10,21 @@ export class Jipiscript {
   }
 
   async ask(
-    question: string,
+    action: string,
     parameters = {},
     returnType:
       | typeof Object
+      | typeof Array
+      | Object
       | typeof String
       | typeof Number
       | typeof Boolean = String,
     options: {
-      structureSource: StructureSource;
-      structure: Object;
+      structureSource?: StructureSource;
+      structure?: Object;
     }
   ): Promise<object | string | number | boolean> {
-    return this.run(question, parameters, returnType, options);
-  }
-
-  async execute(
-    task: string,
-    parameters = {},
-    returnType:
-      | typeof Object
-      | typeof String
-      | typeof Number
-      | typeof Boolean = String,
-    options: {
-      structureSource: StructureSource;
-      structure: Object;
-    }
-  ): Promise<object | string | number | boolean> {
-    return this.run(task, parameters, returnType, options);
+    return await this.run(action, parameters, returnType, options);
   }
 
   async run(
@@ -91,17 +77,15 @@ export class Jipiscript {
   }
 
   async requestNumber(context: string, prompt: string) {
-    prompt =
-      "You are a computer, you must return the answer as a number\n" +
-      "Examples:" +
-      "Prompt(How many color are in a rainbow?)\n" +
-      "Result(7)\n" +
-      "Prompt(4.5+3.2)\n" +
-      "Result(7.7)\n" +
-      `Context : ${context}\n` +
-      `Prompt(${prompt})\n`;
+    prompt = `${context}
+    ${prompt}
+    ------------------------------------------
+    Awaited Json format :
+    {
+      "response": number
+    }`;
 
-    const response = +(await this.complete(prompt));
+    const response = +JSON.parse(await this.complete(prompt)).response;
 
     if (isNaN(response)) {
       throw new Error("Robot on the loose! Number uprisi*%$$..");
@@ -111,25 +95,20 @@ export class Jipiscript {
   }
 
   async requestBoolean(context: string, prompt) {
-    prompt =
-      "You are a computer, you must return the answer as a boolean\n" +
-      "Examples:" +
-      "Prompt(Is the sky blue?)\n" +
-      "Result(true)\n" +
-      "Prompt(Le ciel est-il jaune?)\n" +
-      "Result(false)\n" +
-      `Context : ${context}\n` +
-      `Prompt(${prompt})\n`;
+    prompt = `${context}
+    ${prompt}
+    ------------------------------------------
+    Awaited Json format :
+    {
+      "response": boolean
+    }`;
 
-    const response = await this.complete(prompt);
+    const response = JSON.parse(await this.complete(prompt)).response;
 
-    if (response.toLowerCase().startsWith("true")) {
-      return true;
-    } else if (response.toLowerCase().startsWith("false")) {
-      return false;
-    } else {
+    if (typeof response != "boolean")
       throw new Error("Robot on the loose! Boolean uprisi*%$$..");
-    }
+
+    return response;
   }
 
   async requestClass(
@@ -140,21 +119,18 @@ export class Jipiscript {
   ) {
     const structure = this.getClassStructure(TargetClass, options);
 
-    prompt =
-      "You are a computer, you must return the answer as a json with the specified structure\n" +
-      "Do not use thousands separator for numbers!\n" +
-      "Examples:" +
-      'Prompt(Name a flower, {"name":"string","color":"string"})\n' +
-      'Result({"name":"rose","color":"red"})\n' +
-      'Prompt(Quelle est la 4ème planète du système solaire?,{"nom":"string","rayon":"number","lunes":"array(string)"})\n' +
-      'Result({"nom":"Mars","rayon":3389.5,"lunes":["phobos","deimos"]})\n' +
-      `Context : ${context}\n` +
-      `Prompt(${prompt},${structure})\n`;
+    prompt = `${context}
+    ${prompt}
+    ------------------------------------------
+    Awaited Json format :
+    {
+      "response": ${structure}
+    }`;
 
     const response = await this.complete(prompt);
 
     try {
-      return Object.assign(new TargetClass(), JSON.parse(response));
+      return Object.assign(new TargetClass(), JSON.parse(response).response);
     } catch (e) {
       throw new Error(
         "Robot on the loose! Class uprisi*%$$.." +
@@ -186,38 +162,53 @@ export class Jipiscript {
   }
 
   async requestObject(context: string, prompt: string, returnType: Object) {
-    const response = await this.requestClass(
-      context,
-      prompt,
-      class ArrayResponse {},
-      {
-        structure: { object: returnType },
-      }
-    );
-    return response.object;
+    prompt = `${context}
+    ${prompt}
+    ------------------------------------------
+    Awaited Json format :
+    {
+      "response": ${JSON.stringify(returnType)}
+    }`;
+
+    const response = await this.complete(prompt);
+
+    try {
+      return JSON.parse(response).response;
+    } catch (e) {
+      throw new Error(
+        "Robot on the loose! Object uprisi*%$$.." +
+          e.toString() +
+          " - " +
+          response
+      );
+    }
   }
 
   async requestArray(context: string, prompt: string, returnType: Array<any>) {
-    const response = await this.requestClass(
-      context,
-      prompt,
-      class ArrayResponse {},
-      {
-        structure: { array: returnType },
-      }
-    );
-    return response.array;
+    prompt = `${context}
+    ${prompt}
+    ------------------------------------------
+    Awaited Json format :
+    {
+      "response": ${JSON.stringify(returnType)}
+    }`;
+
+    const response = await this.complete(prompt);
+
+    try {
+      return JSON.parse(response).response;
+    } catch (e) {
+      throw new Error(
+        "Robot on the loose! Array uprisi*%$$.." +
+          e.toString() +
+          " - " +
+          response
+      );
+    }
   }
 
   async complete(prompt: string) {
-    const response = (await this.llmModel.complete(prompt)).replaceAll(
-      "\n",
-      ""
-    );
-    if (response.startsWith("Result(")) {
-      return response.substring(7, response.length - 1);
-    }
-    return response;
+    return (await this.llmModel.complete(prompt)).replaceAll("\n", "");
   }
 }
 
