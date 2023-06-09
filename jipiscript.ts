@@ -85,13 +85,11 @@ export class Jipiscript {
       "response": number
     }`;
 
-    const response = +JSON.parse(await this.complete(prompt)).response;
-
-    if (isNaN(response)) {
-      throw new Error("Robot on the loose! Number uprisi*%$$..");
-    }
-
-    return response;
+    return this.completeParseRetry(prompt, (response) => {
+      const number = +JSON.parse(response).response;
+      if (isNaN(number))
+        throw new Error(`${number.toString()} is not a number`);
+    });
   }
 
   async requestBoolean(context: string, prompt) {
@@ -103,12 +101,11 @@ export class Jipiscript {
       "response": boolean
     }`;
 
-    const response = JSON.parse(await this.complete(prompt)).response;
-
-    if (typeof response != "boolean")
-      throw new Error("Robot on the loose! Boolean uprisi*%$$..");
-
-    return response;
+    return this.completeParseRetry(prompt, (response) => {
+      const boolean = JSON.parse(response).response;
+      if (typeof boolean != "boolean")
+        throw new Error(`${boolean.toString()} is not a boolean`);
+    });
   }
 
   async requestClass(
@@ -127,18 +124,9 @@ export class Jipiscript {
       "response": ${structure}
     }`;
 
-    const response = await this.complete(prompt);
-
-    try {
-      return Object.assign(new TargetClass(), JSON.parse(response).response);
-    } catch (e) {
-      throw new Error(
-        "Robot on the loose! Class uprisi*%$$.." +
-          e.toString() +
-          " - " +
-          response
-      );
-    }
+    return await this.completeParseRetry(prompt, (response) =>
+      Object.assign(new TargetClass(), JSON.parse(response).response)
+    );
   }
 
   getClassStructure(TargetClass, options) {
@@ -170,18 +158,10 @@ export class Jipiscript {
       "response": ${JSON.stringify(returnType)}
     }`;
 
-    const response = await this.complete(prompt);
-
-    try {
-      return JSON.parse(response).response;
-    } catch (e) {
-      throw new Error(
-        "Robot on the loose! Object uprisi*%$$.." +
-          e.toString() +
-          " - " +
-          response
-      );
-    }
+    return await this.completeParseRetry(
+      prompt,
+      (response) => JSON.parse(response).response
+    );
   }
 
   async requestArray(context: string, prompt: string, returnType: Array<any>) {
@@ -193,18 +173,37 @@ export class Jipiscript {
       "response": ${JSON.stringify(returnType)}
     }`;
 
-    const response = await this.complete(prompt);
+    return await this.completeParseRetry(
+      prompt,
+      (response) => JSON.parse(response).response
+    );
+  }
 
-    try {
-      return JSON.parse(response).response;
-    } catch (e) {
-      throw new Error(
-        "Robot on the loose! Array uprisi*%$$.." +
-          e.toString() +
-          " - " +
-          response
-      );
+  async completeParseRetry(prompt: string, parse: Function) {
+    let currentException = null;
+    let currentResponse = null;
+    for (let i = 0; i < 3; i++) {
+      const response = await this.complete(prompt);
+      try {
+        return parse(response);
+      } catch (e) {
+        currentException = e;
+        currentResponse = response;
+
+        prompt +=
+          `\n----------------------------` +
+          `\nTa précédente réponse: ${response}` +
+          `\nL'erreur: ${e.toString()}` +
+          `\nRegénère une réponse.\n`;
+      }
     }
+
+    throw new Error(
+      "Robot on the loose! Llm uprisi*%$$.." +
+        currentException.toString() +
+        " - " +
+        currentResponse
+    );
   }
 
   async complete(prompt: string) {

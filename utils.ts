@@ -61,3 +61,27 @@ function convertArrayToString(array: any[]) {
     "]"
   );
 }
+
+export function tryRetryNTimes(f, n) {
+  let currentException = null;
+  for (let i = 0; i < n; i++) {
+    try {
+      return f();
+    } catch (e) {
+      currentException = e;
+    }
+  }
+  throw currentException;
+}
+
+export async function AsyncTryRetryNTimes(f, n) {
+  let currentException = null;
+  for (let i = 0; i < n; i++) {
+    try {
+      return await f();
+    } catch (e) {
+      currentException = e;
+    }
+  }
+  throw currentException;
+}
