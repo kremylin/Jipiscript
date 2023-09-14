@@ -1,39 +1,22 @@
-export function inferClassStructure(instance) {
-  const structure = {};
+import { Message, MessageRole } from "./message.js";
+import { JipiFunction } from "./jipitype/models/JipiFunction.js";
+import { FunctionExecutionResult } from "./models/FunctionExecutionResult.js";
 
-  for (const key of Object.keys(instance)) {
-    const type = typeof instance[key];
-    if (instance[key] instanceof Array) {
-      structure[key] = getArrayStructure(instance[key]);
-    } else if (type === "object" && instance[key]) {
-      structure[key] = inferClassStructure(instance[key]);
-    } else if (type === "undefined") {
-      structure[key] = "any";
-    } else {
-      structure[key] = type;
+export function inferStructure(object) {
+  const type = typeof object;
+  if (object instanceof Array) {
+    return object.map(inferStructure);
+  } else if (type === "object" && object) {
+    const structure = {};
+    for (const key of Object.keys(object)) {
+      structure[key] = inferStructure(object[key]);
     }
+    return structure;
+  } else if (type === "undefined") {
+    return "any";
+  } else {
+    return type;
   }
-
-  return structure;
-}
-
-function getArrayStructure(array) {
-  const structure = [];
-
-  for (const value of array) {
-    const type = typeof value;
-    if (value instanceof Array) {
-      structure.push(getArrayStructure(value));
-    } else if (type === "object" && value) {
-      structure.push(inferClassStructure(value));
-    } else if (type === "undefined") {
-      structure.push("any");
-    } else {
-      structure.push(type);
-    }
-  }
-
-  return structure;
 }
 
 export function convertToString(param: any): string {
@@ -53,13 +36,7 @@ function convertObjectToString(obj: object) {
 }
 
 function convertArrayToString(array: any[]) {
-  return (
-    "[" +
-    array
-      .map((value, index) => index + ": " + convertToString(value))
-      .join(", ") +
-    "]"
-  );
+  return "[" + array.map((value, index) => index + ": " + convertToString(value)).join(", ") + "]";
 }
 
 export function tryRetryNTimes(f, n) {
@@ -84,4 +61,41 @@ export async function AsyncTryRetryNTimes(f, n) {
     }
   }
   throw currentException;
+}
+
+export function isClass(c) {
+  if (typeof c !== "function") return false;
+  if (!c.prototype) return false;
+  if (c === String || c === Number || c === Boolean || c === Date) return false;
+  return c.prototype.constructor === c;
+}
+
+//************************* Disambiguation functions *************************//
+export function stringOrMessageArrayToMessageArray(action: string | Message[]): Message[] {
+  if (typeof action === "string") {
+    return [new Message(MessageRole.USER, action)];
+  }
+  return action;
+}
+
+export function toJipiFunctionArray(functions: JipiFunction | JipiFunction[]): JipiFunction[] {
+  if (functions instanceof JipiFunction) {
+    return [functions];
+  }
+  return functions;
+}
+
+export function normalizeFunctionExecutionResult(
+  response: string | FunctionExecutionResult
+): FunctionExecutionResult {
+  function stringify(response) {
+    return String(response) === "[object Object]" ? JSON.stringify(response) : String(response);
+  }
+
+  if (typeof response === "string") {
+    return new FunctionExecutionResult(stringify(response), {});
+  }
+
+  const result = response.changes.interrupt ? response.result : stringify(response.result);
+  return new FunctionExecutionResult(result, response.changes);
 }

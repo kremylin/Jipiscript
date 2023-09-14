@@ -1,5 +1,5 @@
 import { Configuration, OpenAIApi } from "openai";
-import { tryRetryNTimes } from "./utils.js";
+import { tryRetryNTimes } from "../../utils.js";
 
 export class Gpt3Wrapper {
   private readonly openai;
@@ -30,9 +30,7 @@ export class Gpt3Wrapper {
           })
           .then((response) => {
             const { data } = response;
-            return data.choices && data.choices.length
-              ? data.choices[0].text
-              : "";
+            return data.choices && data.choices.length ? data.choices[0].text : "";
           }),
       3
     );

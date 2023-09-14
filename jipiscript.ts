@@ -1,233 +1,196 @@
-import { convertToString, inferClassStructure } from "./utils.js";
+import { convertToString, isClass } from "./utils.js";
+import { LlmFunctionRunner } from "./llm-function-runner.js";
+import { LlmChatModel } from "./models/llm-chat-model.js";
+import { Message, MessageRole } from "./message.js";
+import { JipiFunction } from "./jipitype/models/JipiFunction.js";
+import { normalize } from "./jipitype/jipitype.js";
+import * as z from "zod";
+
+type JipiReturnType =
+  | typeof Object
+  | typeof Array
+  | Object
+  | { new (...args: any[]): any }
+  | typeof String
+  | typeof Number
+  | typeof Boolean
+  | z.ZodType;
+
+type Option = { structure?: Object };
 
 export class Jipiscript {
-  private llmModel: LlmModel;
-  private context: string;
+  private functionRunner: LlmFunctionRunner;
 
-  constructor(llmModel: LlmModel, context: string = "") {
-    this.llmModel = llmModel;
-    this.context = context;
+  constructor(llmChatModel: LlmChatModel) {
+    this.functionRunner = new LlmFunctionRunner(llmChatModel);
+  }
+
+  async chatCompletion(
+    messages: Message[],
+    functions?: JipiFunction | JipiFunction[],
+    function_call?: string | { name: string }
+  ): Promise<Message> {
+    return this.functionRunner.chatCompletion(messages, functions, function_call);
   }
 
   async ask(
-    action: string,
+    action: string | Message[],
     parameters = {},
-    returnType:
-      | typeof Object
-      | typeof Array
-      | Object
-      | typeof String
-      | typeof Number
-      | typeof Boolean = String,
-    options: {
-      structureSource?: StructureSource;
-      structure?: Object;
-    }
+    returnType: JipiReturnType = String,
+    options: Option = {}
   ): Promise<object | string | number | boolean> {
-    return await this.run(action, parameters, returnType, options);
+    const messages = Jipiscript.buildMessages(action, parameters);
+
+    const result = await this.functionRunner.askThenGetResult(
+      messages,
+      Jipiscript.convertToZodSchema(returnType, options)
+    );
+
+    return Jipiscript.convertToReturnType(result, returnType);
   }
 
+  // Surcharge
+  async call(
+    action: string | Message[],
+    parameters: any,
+    functions?: JipiFunction | JipiFunction[],
+    function_call?: string | { name: string }
+  ): Promise<object | string | number | boolean>;
+  async call(
+    action: string | Message[],
+    functions: JipiFunction | JipiFunction[],
+    function_call?: string | { name: string }
+  ): Promise<object | string | number | boolean>;
+  // Function
+  async call(
+    action: string | Message[],
+    parametersOrFunction: Object | (JipiFunction | JipiFunction[]) = {},
+    functionsOrFunctionCall?: (JipiFunction | JipiFunction[]) | (string | { name: string }),
+    functionCall?: string | { name: string }
+  ): Promise<object | string | number | boolean> {
+    let { parameters, functions, function_call } = {
+      parameters: parametersOrFunction as Object,
+      functions: functionsOrFunctionCall as JipiFunction | JipiFunction[],
+      function_call: functionCall as string | { name: string },
+    };
+
+    if (parameters instanceof JipiFunction || parameters instanceof Array) {
+      parameters = {};
+      functions = parametersOrFunction as JipiFunction | JipiFunction[];
+      function_call = functionsOrFunctionCall as string | { name: string };
+    }
+
+    const messages = Jipiscript.buildMessages(action, parameters);
+
+    return await this.functionRunner.askThenCallFunctionAndGetResult(
+      messages,
+      functions as JipiFunction | JipiFunction[],
+      function_call
+    );
+  }
+
+  // Surcharge
   async run(
-    action: string,
-    parameters = {},
-    returnType:
-      | typeof Object
-      | typeof Array
-      | Object
-      | typeof String
-      | typeof Number
-      | typeof Boolean = String,
-    options: {
-      structureSource?: StructureSource;
-      structure?: Object;
-    }
+    action: string | Message[],
+    parameters?: Object,
+    functions?: JipiFunction | JipiFunction[],
+    function_call?: string | { name: string },
+    returnType?: JipiReturnType,
+    options?: Option
+  ): Promise<object | string | number | boolean>;
+  async run(
+    action: string | Message[],
+    functions: JipiFunction | JipiFunction[],
+    function_call?: string | { name: string },
+    returnType?: JipiReturnType,
+    options?: Option
+  ): Promise<object | string | number | boolean>;
+  // Function
+  async run(
+    action: string | Message[],
+    parametersOrFunctions: Object | (JipiFunction | JipiFunction[]) = {},
+    functionsOrFunctionCall?: JipiFunction | JipiFunction[] | string | { name: string },
+    functionCallOrReturnType?: string | { name: string } | JipiReturnType,
+    returnTypeOrOptions?: JipiReturnType | Option,
+    optionsOrNothing: Option = {}
   ): Promise<object | string | number | boolean> {
-    const prompt = populateParameters(action, parameters);
+    let { parameters, functions, function_call, returnType, options } = {
+      parameters: parametersOrFunctions as Object,
+      functions: functionsOrFunctionCall as JipiFunction | JipiFunction[],
+      function_call: functionCallOrReturnType as string | { name: string },
+      returnType: returnTypeOrOptions as JipiReturnType,
+      options: optionsOrNothing as Option,
+    };
 
-    if (returnType === String) {
-      return await this.requestString(this.context, prompt);
-    } else if (returnType === Number) {
-      return await this.requestNumber(this.context, prompt);
-    } else if (returnType === Boolean) {
-      return await this.requestBoolean(this.context, prompt);
-    } else if (returnType === Array) {
-      return await this.requestArray(this.context, prompt, []);
-    } else if (returnType instanceof Array) {
-      return await this.requestArray(this.context, prompt, returnType);
-    } else if (returnType === Object) {
-      return await this.requestObject(this.context, prompt, {});
-    } else if (returnType && returnType.constructor === Object) {
-      return await this.requestObject(this.context, prompt, returnType);
+    if (parameters instanceof JipiFunction || parameters instanceof Array) {
+      parameters = {};
+      functions = parametersOrFunctions as JipiFunction | JipiFunction[];
+      function_call = functionsOrFunctionCall as string | { name: string };
+      returnType = functionCallOrReturnType as JipiReturnType;
+      options = optionsOrNothing as Option;
     }
 
-    return this.requestClass(this.context, prompt, returnType, options);
-  }
+    returnType = returnType || String;
+    options = options || {};
 
-  changeContext(context: string) {
-    if (typeof context != "string") {
-      throw new Error(
-        "Stupid meatbag... The context must obviously be a string"
-      );
-    }
-    this.context = context;
-  }
+    const messages = Jipiscript.buildMessages(action, parameters);
 
-  async requestString(context: string, prompt: string) {
-    return await this.llmModel.complete(context + prompt);
-  }
-
-  async requestNumber(context: string, prompt: string) {
-    prompt = `${context}
-    ${prompt}
-    ------------------------------------------
-    Awaited Json format :
-    {
-      "response": number
-    }`;
-
-    return this.completeParseRetry(prompt, (response) => {
-      const number = +JSON.parse(response).response;
-      if (isNaN(number))
-        throw new Error(`${number.toString()} is not a number`);
-    });
-  }
-
-  async requestBoolean(context: string, prompt) {
-    prompt = `${context}
-    ${prompt}
-    ------------------------------------------
-    Awaited Json format :
-    {
-      "response": boolean
-    }`;
-
-    return this.completeParseRetry(prompt, (response) => {
-      const boolean = JSON.parse(response).response;
-      if (typeof boolean != "boolean")
-        throw new Error(`${boolean.toString()} is not a boolean`);
-    });
-  }
-
-  async requestClass(
-    context: string,
-    prompt: string,
-    TargetClass,
-    options?: { structureSource?: StructureSource; structure?: Object }
-  ) {
-    const structure = this.getClassStructure(TargetClass, options);
-
-    prompt = `${context}
-    ${prompt}
-    ------------------------------------------
-    Awaited Json format :
-    {
-      "response": ${structure}
-    }`;
-
-    return await this.completeParseRetry(prompt, (response) =>
-      Object.assign(new TargetClass(), JSON.parse(response).response)
+    const result = await this.functionRunner.askThenLetLlmRunFunctions(
+      messages,
+      functions,
+      function_call,
+      Jipiscript.convertToZodSchema(returnType, options)
     );
+
+    return Jipiscript.convertToReturnType(result, returnType);
   }
 
-  getClassStructure(TargetClass, options) {
-    let structureSource = StructureSource.EmptyInstance;
+  //*************************************** Utilities ***************************************//
+  private static buildMessages(action: string | Message[], parameters: {}) {
+    if (typeof action === "string") {
+      return [new Message(MessageRole.USER, Jipiscript.populateParameters(action, parameters))];
+    } else {
+      return action.map((message) => ({
+        ...message,
+        content: Jipiscript.populateParameters(message.content, parameters),
+      }));
+    }
+  }
 
-    if (options?.structureSource) {
-      structureSource = options.structureSource;
-    } else if (options?.structure) {
-      structureSource = StructureSource.Options;
-    } else if (TargetClass?.jipi?.structure) {
-      structureSource = StructureSource.JipiProperty;
+  private static convertToZodSchema(returnType, options: Option = {}) {
+    let rawSchema = returnType;
+    // Cas particulier où le return type est une classe et une structure est fournie
+    if (isClass(returnType) && options.structure) {
+      rawSchema = options.structure;
     }
 
-    return JSON.stringify(
-      structureSource === StructureSource.Options
-        ? options.structure
-        : structureSource === StructureSource.JipiProperty
-        ? TargetClass.jipi.structure
-        : inferClassStructure(new TargetClass())
-    );
+    return normalize(rawSchema);
   }
 
-  async requestObject(context: string, prompt: string, returnType: Object) {
-    prompt = `${context}
-    ${prompt}
-    ------------------------------------------
-    Awaited Json format :
-    {
-      "response": ${JSON.stringify(returnType)}
-    }`;
+  private static convertToReturnType(result, returnType: JipiReturnType) {
+    if (!isClass(returnType)) return result;
 
-    return await this.completeParseRetry(
-      prompt,
-      (response) => JSON.parse(response).response
-    );
+    if (returnType && returnType.hasOwnProperty("fromJson"))
+      return (returnType as { fromJson: Function }).fromJson(result);
+
+    const ReturnClass = returnType as { new (...args: any[]): any; jipi?: any };
+
+    if (ReturnClass.jipi) {
+      return new ReturnClass(result);
+    } else {
+      // For non jipified classes, we are not sure the constructor works the way we intend it to
+      return Object.assign(new ReturnClass(result), result);
+    }
   }
 
-  async requestArray(context: string, prompt: string, returnType: Array<any>) {
-    prompt = `${context}
-    ${prompt}
-    ------------------------------------------
-    Awaited Json format :
-    {
-      "response": ${JSON.stringify(returnType)}
-    }`;
+  private static populateParameters(action: string, params: { [key: string]: any }): string {
+    let prompt = action;
+    const keys = Object.keys(params).sort((a, b) => b.length - a.length);
 
-    return await this.completeParseRetry(
-      prompt,
-      (response) => JSON.parse(response).response
-    );
-  }
-
-  async completeParseRetry(prompt: string, parse: Function) {
-    let currentException = null;
-    let currentResponse = null;
-    for (let i = 0; i < 3; i++) {
-      const response = await this.complete(prompt);
-      try {
-        return parse(response);
-      } catch (e) {
-        currentException = e;
-        currentResponse = response;
-
-        prompt +=
-          `\n----------------------------` +
-          `\nTa précédente réponse: ${response}` +
-          `\nL'erreur: ${e.toString()}` +
-          `\nRegénère une réponse.\n`;
-      }
+    for (const key of keys) {
+      prompt = prompt.replaceAll(`$${key}`, convertToString(params[key]));
     }
 
-    throw new Error(
-      "Robot on the loose! Llm uprisi*%$$.." +
-        currentException.toString() +
-        " - " +
-        currentResponse
-    );
+    return prompt;
   }
-
-  async complete(prompt: string) {
-    return (await this.llmModel.complete(prompt)).replaceAll("\n", "");
-  }
-}
-
-// TODO If word is a parameter, it's not possible to have $word in the sentence, Improve that by allowing to escape $
-function populateParameters(
-  action: string,
-  params: { [key: string]: any }
-): string {
-  let prompt = action;
-  const keys = Object.keys(params).sort((a, b) => b.length - a.length);
-
-  for (const key of keys) {
-    prompt = prompt.replaceAll(`$${key}`, convertToString(params[key]));
-  }
-
-  return prompt;
-}
-
-export enum StructureSource {
-  EmptyInstance,
-  JipiProperty,
-  Options,
 }
