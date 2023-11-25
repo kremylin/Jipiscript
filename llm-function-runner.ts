@@ -186,7 +186,10 @@ export class LlmFunctionRunner {
 
       // If no function is called
       if (!message.function_call) {
-        messages.push(message, new Message(MessageRole.USER, "No function called"));
+        messages.push(
+          message,
+          new Message(MessageRole.USER, "No function has been called, use the functions and only the functions")
+        );
         continue;
       }
 
@@ -212,7 +215,7 @@ export class LlmFunctionRunner {
       if (!f) {
         messages.push(
           message,
-          new Message(MessageRole.FUNCTION, `Function ${calledFunctionName} not found`, calledFunctionName)
+          new Message(MessageRole.FUNCTION, `Function ${calledFunctionName} not found`, "functionNotFound")
         );
         continue;
       }
@@ -255,7 +258,7 @@ export class LlmFunctionRunner {
 
   //****************************** Utilities ******************************//
   static getMessageArguments(message: Message) {
-    return JSON.parse((message.function_call as { name: string; arguments: string }).arguments);
+    return JSON.parse((message.function_call as { name: string; arguments: string }).arguments.replaceAll("\n", " "));
   }
 
   static getFunctionJsonSchema(f: JipiFunction) {

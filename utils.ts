@@ -58,6 +58,7 @@ export async function AsyncTryRetryNTimes(f, n) {
       return await f();
     } catch (e) {
       currentException = e;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
   throw currentException;
